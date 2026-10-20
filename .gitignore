@@ -1,0 +1,10 @@
+# Private: the real message, gift card code/PIN and card art in plain text — never commit.
+content.json
+card.jpg
+Screenshot*.png
+*.backup.json
+
+dist/
+.venv/
+__pycache__/
+.DS_Store

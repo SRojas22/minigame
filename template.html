@@ -1,0 +1,1482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<!-- The page can't send data anywhere: no fetch/XHR, and only these two hosts may serve code/styles. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Mission Access</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@500&family=Teko:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #0f1923;
+    --panel: rgba(13, 21, 30, .86);
+    --line: rgba(236, 232, 225, .14);
+    --bone: #ece8e1;
+    --muted: #8b97a3;
+    --red: #ff4655;
+    --red-dark: #bd3944;
+    --teal: #3ee6d6;
+    --cut: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+    --ease-out: cubic-bezier(.2, .8, .2, 1);
+    --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    font-family: "Chakra Petch", system-ui, sans-serif;
+    color: var(--bone);
+    background:
+      radial-gradient(circle at 82% 13%, #e6edff 0 34px, rgba(190,210,255,.22) 36px, transparent 150px),
+      radial-gradient(1000px 520px at 50% 118%, rgba(255,70,85,.30), transparent 62%),
+      radial-gradient(700px 500px at 10% 0%, rgba(62,230,214,.10), transparent 60%),
+      linear-gradient(180deg, #060a10, var(--bg) 55%, #1a1220);
+    user-select: none; -webkit-user-select: none;
+  }
+  body::after { /* scanlines */
+    content: ""; position: fixed; inset: 0; z-index: 4; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px);
+  }
+  #world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+  #fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; }
+  .layer { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; }
+  .layer[hidden] { display: none; }
+
+  .eyebrow { font: 600 .72rem "JetBrains Mono", monospace; letter-spacing: .28em; text-transform: uppercase; color: var(--teal); }
+  .eyebrow::before { content: "◆ "; color: var(--red); }
+
+  /* ---------- angular buttons ---------- */
+  .vbtn {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 15px 30px; border: 0; cursor: pointer; text-decoration: none;
+    font: 700 1rem "Chakra Petch", sans-serif; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--bone); background: var(--red);
+    clip-path: var(--cut);
+    transition: background .2s, transform .15s, letter-spacing .25s;
+  }
+  .vbtn:hover { background: #ff5b68; letter-spacing: .2em; }
+  .vbtn:active { transform: scale(.97); }
+  .vbtn:disabled { background: var(--red-dark); cursor: progress; }
+  .vbtn--ghost { background: rgba(236,232,225,.08); box-shadow: inset 0 0 0 1px var(--line); }
+  .vbtn--ghost:hover { background: rgba(236,232,225,.16); }
+  .vbtn[hidden] { display: none; }
+
+  /* ---------- login ---------- */
+  #login { background: radial-gradient(ellipse at center, rgba(6,10,16,.25), rgba(6,10,16,.75)); transition: opacity .7s; }
+  #login.leaving { opacity: 0; pointer-events: none; }
+  .login {
+    position: relative; width: min(420px, 100%);
+    padding: 34px 30px 26px;
+    background: var(--panel);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    clip-path: var(--cut);
+    box-shadow: inset 0 0 0 1px var(--line);
+    animation: glitchIn .8s var(--ease-out) both;
+  }
+  .login::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--red); }
+  @keyframes glitchIn {
+    0% { opacity: 0; clip-path: polygon(0 45%, 100% 45%, 100% 55%, 0 55%); transform: skewX(-8deg); }
+    40% { opacity: 1; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); transform: skewX(3deg); }
+    100% { clip-path: var(--cut); transform: none; }
+  }
+  .login.shake { animation: shake .45s; }
+  @keyframes shake { 20% { transform: translateX(-10px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(3px); } }
+  .login h1 { margin: 10px 0 2px; font: 600 clamp(3.4rem, 15vw, 4.4rem) "Teko", sans-serif; line-height: .8; letter-spacing: .02em; text-transform: uppercase; }
+  .login .sub { margin: 0 0 26px; color: var(--muted); font-size: .95rem; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; margin-bottom: 6px; font: 600 .7rem "Chakra Petch", sans-serif; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .field input {
+    width: 100%; padding: 14px 16px;
+    font: 500 1.05rem "Chakra Petch", sans-serif; color: var(--bone);
+    background: rgba(236,232,225,.05); border: 1px solid var(--line); border-radius: 0; outline: none;
+    transition: border-color .2s, background .2s;
+    user-select: text; -webkit-user-select: text;
+  }
+  .field input:focus { border-color: var(--red); background: rgba(236,232,225,.08); }
+  .login .vbtn { width: 100%; margin-top: 8px; }
+  .status { min-height: 1.3em; margin: 14px 0 0; font: 600 .78rem "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .status.error { color: var(--red); }
+  .hint { margin: 6px 0 0; font-size: .85rem; color: var(--muted); }
+  .hint b { color: var(--bone); font-weight: 500; }
+  .foot { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; font: 500 .62rem "JetBrains Mono", monospace; letter-spacing: .16em; color: rgba(139,151,163,.7); }
+
+  /* ---------- welcome brief ---------- */
+  #brief { pointer-events: none; text-align: center; }
+  #brief .bar { position: absolute; left: 0; right: 0; height: 130px; top: 50%; margin-top: -65px; background: linear-gradient(90deg, transparent, rgba(6,10,16,.85) 20%, rgba(6,10,16,.85) 80%, transparent); animation: barIn .5s var(--ease-out) both; }
+  @keyframes barIn { from { transform: scaleX(0); } }
+  #brief .inner { position: relative; animation: fadeUp .5s var(--ease-out) both .15s; }
+  #brief h2 { margin: 4px 0; font: 600 clamp(2.6rem, 11vw, 4.2rem) "Teko", sans-serif; line-height: .9; text-transform: uppercase; letter-spacing: .03em; }
+  #brief h2 em { font-style: normal; color: var(--red); }
+  #brief p { margin: 0; color: var(--muted); font-size: .95rem; letter-spacing: .06em; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  #hud[hidden] { display: none; }
+  .obj {
+    position: absolute; top: max(14px, env(safe-area-inset-top)); left: 14px;
+    padding: 10px 18px 10px 14px; background: var(--panel); clip-path: var(--cut);
+    box-shadow: inset 3px 0 0 var(--red);
+  }
+  .obj small { display: block; font: 600 .62rem "JetBrains Mono", monospace; letter-spacing: .22em; color: var(--red); }
+  .obj span { font-weight: 600; font-size: .98rem; letter-spacing: .04em; }
+  .orbs { position: absolute; top: max(24px, env(safe-area-inset-top)); right: 18px; display: flex; gap: 9px; align-items: center; }
+  .orbs i { width: 13px; height: 13px; transform: rotate(45deg); border: 2px solid rgba(62,230,214,.6); transition: background .3s, box-shadow .3s; }
+  .orbs i.on { background: var(--teal); box-shadow: 0 0 12px var(--teal); }
+  .bubble {
+    position: absolute; left: 50%; bottom: max(22px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    max-width: calc(100% - 32px); width: max-content;
+    padding: 12px 22px 12px 20px; background: var(--panel); clip-path: var(--cut);
+    box-shadow: inset 3px 0 0 var(--teal);
+    font-weight: 600; font-size: clamp(.82rem, 3.4vw, .95rem); letter-spacing: .1em; text-transform: uppercase; text-align: center;
+  }
+  .bubble:empty { display: none; }
+  .hud-loot { position: absolute; top: max(56px, calc(env(safe-area-inset-top) + 42px)); right: 14px; pointer-events: auto; padding: 10px 16px; font-size: .75rem; }
+  .bubble.pop { animation: pop .3s var(--ease-out); }
+  @keyframes pop { from { opacity: 0; transform: translate(-50%, 10px); } }
+  .toast {
+    position: absolute; left: 50%; top: 20%; transform: translateX(-50%);
+    font: 600 2.4rem "Teko", sans-serif; letter-spacing: .08em; color: var(--teal); white-space: nowrap;
+    text-shadow: 0 0 18px rgba(62,230,214,.6);
+    animation: toast 1.2s ease-out forwards;
+  }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 16px); } 20% { opacity: 1; transform: translate(-50%, 0); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -24px); } }
+
+  /* ---------- letter ---------- */
+  #letter-layer { background: rgba(6,10,16,.6); }
+  .msg {
+    position: relative; width: min(620px, 100%); max-height: min(86vh, 880px);
+    display: flex; flex-direction: column;
+    background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    clip-path: var(--cut); box-shadow: inset 0 0 0 1px var(--line);
+    animation: glitchIn .9s var(--ease-out) both;
+  }
+  .msg-head { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--line); box-shadow: inset 3px 0 0 var(--red); }
+  .msg-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1.2s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .msg-body { overflow-y: auto; overscroll-behavior: contain; padding: clamp(24px, 6vw, 44px) clamp(22px, 6vw, 46px); user-select: text; -webkit-user-select: text; }
+  .msg-body::-webkit-scrollbar { width: 6px; } .msg-body::-webkit-scrollbar-thumb { background: var(--line); }
+  .dear { margin: 0 0 18px; font: 600 clamp(2.2rem, 8vw, 2.8rem) "Teko", sans-serif; line-height: .9; letter-spacing: .02em; }
+  .msg-body p.body { margin: 0 0 1.1em; font: 400 clamp(.98rem, 2.6vw, 1.06rem)/1.8 "Inter", system-ui, sans-serif; color: #d6d1c9; }
+  .sign { margin: 28px 0 0; font: 500 .95rem "Inter", sans-serif; color: var(--muted); }
+  .from { margin: 0; font: 600 2.3rem "Caveat", cursive; color: var(--bone); }
+  .msg-body .more { margin-top: 30px; }
+  .fade { opacity: 0; transform: translateY(10px); transition: opacity .6s, transform .6s var(--ease-out); }
+  .fade.in { opacity: 1; transform: none; }
+
+  /* ---------- gift card ---------- */
+  #card-layer { background: radial-gradient(ellipse 70% 55% at 50% 42%, rgba(62,230,214,.16), rgba(6,10,16,.88)); overflow-y: auto; align-content: center; }
+  .card-scene { text-align: center; width: 100%; max-width: 460px; padding: 10px 0 30px; }
+  .card-intro-wrap { animation: glitchIn .8s var(--ease-out) both; }
+  .card-intro-wrap[hidden], .card-reveal[hidden] { display: none; }
+  .card-intro { margin: 16px 0 30px; font-weight: 500; font-size: clamp(1.15rem, 4.4vw, 1.45rem); line-height: 1.55; color: var(--bone); animation: fadeUp .8s var(--ease-out) both .3s; }
+  .card-intro-wrap .vbtn { animation: fadeUp .6s var(--ease-out) both 1.4s; }
+  .card-stage { position: relative; width: min(370px, 86vw); margin: 0 auto; perspective: 1400px; animation: drop 1.3s var(--ease-spring) both .45s; }
+  @keyframes drop { from { opacity: 0; transform: translateY(40vh) scale(.4) rotateX(60deg); } }
+  .shards { position: absolute; inset: -50px -36px; pointer-events: none; }
+  .shards i { position: absolute; width: 10px; height: 10px; background: var(--teal); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); filter: drop-shadow(0 0 6px var(--teal)); animation: twinkle var(--d) ease-in-out infinite var(--delay); }
+  .shards i:nth-child(3n) { background: var(--red); filter: drop-shadow(0 0 6px var(--red)); }
+  .shards i:nth-child(4n) { background: var(--bone); filter: none; }
+  @keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(.2) rotate(0); } 50% { opacity: 1; transform: scale(1) rotate(180deg); } }
+  .floaty { animation: floaty 4.2s ease-in-out infinite; transform-style: preserve-3d; }
+  @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-18px); } }
+  .sway { animation: sway 7s ease-in-out infinite; transform-style: preserve-3d; }
+  @keyframes sway { 0%, 100% { transform: rotateY(-12deg) rotateX(5deg) rotateZ(-1.5deg); } 50% { transform: rotateY(12deg) rotateX(-4deg) rotateZ(1.5deg); } }
+  .tilt { transform-style: preserve-3d; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .25s ease-out; }
+  .card-glow { width: 78%; height: 22px; margin: 34px auto 0; border-radius: 50%; background: radial-gradient(closest-side, rgba(62,230,214,.55), transparent); animation: glow 4.2s ease-in-out infinite; }
+  @keyframes glow { 50% { transform: scale(.72); opacity: .5; } }
+
+  .flip { position: relative; display: block; width: 100%; aspect-ratio: 592 / 372; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; color: inherit; transform-style: preserve-3d; transition: transform 1s var(--ease-spring); }
+  .flip:focus-visible { outline: 2px solid var(--teal); outline-offset: 8px; }
+  .flip.flipped { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; border-radius: 16px; overflow: hidden;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 40px 70px -24px #000, 0 0 70px -14px rgba(62,230,214,.45);
+  }
+  .front { background: linear-gradient(135deg, #cfd8df, #6e7d89 45%, #1b232b); background-size: cover; background-position: center; }
+  .front .brand-fallback { position: absolute; left: 22px; bottom: 16px; font: 700 3rem "Chakra Petch", sans-serif; color: #fff; }
+  .front::after { /* glare */
+    content: ""; position: absolute; top: -60%; left: -90%; width: 50%; height: 220%; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+    transform: rotate(22deg); animation: glare 4.5s ease-in-out infinite 1.8s;
+  }
+  @keyframes glare { 0%, 50% { left: -90%; } 100% { left: 160%; } }
+  .tap-chip { position: absolute; top: 12px; right: 12px; padding: 6px 10px; background: rgba(8,12,18,.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); font: 600 .66rem "JetBrains Mono", monospace; letter-spacing: .16em; color: #fff; animation: chip 2s ease-in-out infinite; }
+  @keyframes chip { 50% { background: rgba(62,230,214,.45); } }
+  .back {
+    transform: rotateY(180deg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px;
+    background: linear-gradient(rgba(9,14,20,.86), rgba(9,14,20,.94)), linear-gradient(135deg, #cfd8df, #1b232b);
+    background-size: cover; background-position: center;
+  }
+  .back .label { font: 600 .66rem "JetBrains Mono", monospace; letter-spacing: .24em; color: var(--teal); }
+  .code {
+    max-width: 100%; padding: 12px 16px;
+    font: 500 clamp(.9rem, 4vw, 1.2rem) "JetBrains Mono", ui-monospace, monospace; letter-spacing: .05em; overflow-wrap: anywhere;
+    color: #fff; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+    user-select: all; -webkit-user-select: all;
+  }
+  .meta { font-size: .85rem; color: var(--muted); }
+  .meta b { color: var(--bone); font-weight: 600; }
+  .meta code { font-family: "JetBrains Mono", monospace; color: var(--bone); }
+  .card-hint { margin: 14px 0 0; font: 600 .78rem "JetBrains Mono", monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .card-actions { margin-top: 18px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .card-actions[hidden], .card-note[hidden] { display: none; }
+  .card-note { margin: 22px 0 0; font: 400 1rem/1.6 "Inter", sans-serif; color: #d6d1c9; }
+  .linkish { margin-top: 26px; background: none; border: 0; cursor: pointer; font: 600 .7rem "JetBrains Mono", monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); text-decoration: underline; }
+  .copied { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 95; padding: 10px 18px; background: var(--teal); color: #061015; font: 700 .8rem "Chakra Petch", sans-serif; letter-spacing: .14em; text-transform: uppercase; clip-path: var(--cut); animation: toast 2s ease-out forwards; }
+
+
+  /* ---------- ninja chop minigame ---------- */
+  #chop-layer { display: block; padding: 0; z-index: 20; background: radial-gradient(ellipse 80% 70% at 50% 35%, rgba(24,38,52,.94), rgba(5,9,14,.98)); }
+  #chop-layer[hidden] { display: none; }
+  #chop-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+  .chop-hud { position: absolute; top: max(18px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(340px, calc(100% - 32px)); text-align: center; pointer-events: none; }
+  .chop-score { font: 600 4.4rem/.8 "Teko", sans-serif; letter-spacing: .02em; }
+  .chop-score small { font-size: 1.7rem; color: var(--muted); }
+  .chop-time { position: relative; height: 10px; margin-top: 12px; background: rgba(236,232,225,.1); box-shadow: inset 0 0 0 1px var(--line); }
+  .chop-time i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: linear-gradient(90deg, var(--red), #ffb14a 45%, var(--teal)); transform-origin: left; }
+  .chop-time.low i { animation: lowTime .35s steps(2) infinite; }
+  @keyframes lowTime { 50% { opacity: .35; } }
+  .chop-zones { position: absolute; left: 0; right: 0; bottom: max(70px, calc(env(safe-area-inset-bottom) + 56px)); display: flex; justify-content: space-between; padding: 0 22px; pointer-events: none; font: 600 .7rem "JetBrains Mono", monospace; letter-spacing: .22em; text-transform: uppercase; color: rgba(139,151,163,.55); }
+  .chop-panel {
+    position: absolute; inset: 0; margin: auto; height: fit-content; width: min(390px, calc(100% - 32px));
+    padding: 28px 26px 24px; text-align: center; background: var(--panel); clip-path: var(--cut);
+    box-shadow: inset 0 0 0 1px var(--line), inset 3px 0 0 var(--red);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    animation: glitchIn .6s var(--ease-out) both;
+  }
+  .chop-panel[hidden] { display: none; }
+  .chop-panel h2 { margin: 8px 0 12px; font: 600 3.6rem/.82 "Teko", sans-serif; text-transform: uppercase; letter-spacing: .02em; }
+  .chop-panel p { margin: 0 0 16px; color: var(--muted); line-height: 1.5; }
+  .chop-panel p b { color: var(--bone); }
+  .chop-panel ul { margin: 0 0 22px; padding: 0; list-style: none; text-align: left; display: grid; gap: 8px; font-size: .92rem; }
+  .chop-panel li { padding-left: 18px; position: relative; }
+  .chop-panel li::before { content: "▸"; position: absolute; left: 0; color: var(--red); }
+  .chop-panel .vbtn { min-width: 60%; }
+  .chop-panel .linkish { margin-top: 16px; }
+  .chop-leave { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); margin: 0; }
+
+  body.no3d #hud { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="world"></canvas>
+  <canvas id="fx"></canvas>
+
+  <!-- login -->
+  <section class="layer" id="login">
+    <form class="login" id="login-form" autocomplete="off">
+      <div class="eyebrow">secure channel</div>
+      <h1>Sign in</h1>
+      <p class="sub">Use the credentials you were given.</p>
+      <div class="field">
+        <label for="user">Username</label>
+        <input id="user" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="pw">Password</label>
+        <input id="pw" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <button class="vbtn" type="submit" id="login-btn">Sign in ▸</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint" id="hint" hidden>hint: <b></b></p>
+      <div class="foot"><span>AES-256 // ENCRYPTED</span><span>v1.0</span></div>
+    </form>
+  </section>
+
+  <!-- welcome -->
+  <section class="layer" id="brief" hidden>
+    <div class="bar"></div>
+    <div class="inner">
+      <div class="eyebrow">access granted</div>
+      <h2>Welcome, <em id="agent"></em></h2>
+      <p>Objective — reach the drop at the end of the map</p>
+    </div>
+  </section>
+
+  <!-- HUD -->
+  <div id="hud" hidden>
+    <div class="obj"><small>OBJECTIVE</small><span id="objective">Reach the drop</span></div>
+    <button class="vbtn hud-loot" id="view-loot" hidden>View drop ▸</button>
+    <div class="orbs" id="orbs" aria-label="Orbs collected"></div>
+    <div class="bubble" id="bubble"></div>
+  </div>
+
+
+  <!-- ninja chop minigame (no secrets here; it only gates the 3D crate animation) -->
+  <section class="layer" id="chop-layer" hidden>
+    <canvas id="chop-canvas"></canvas>
+    <div class="chop-hud">
+      <div class="chop-score"><span id="chop-score">0</span><small> / <span class="chop-target"></span></small></div>
+      <div class="chop-time" id="chop-time"><i id="chop-bar"></i></div>
+    </div>
+    <div class="chop-zones"><span>◀ tap left</span><span>tap right ▶</span></div>
+    <div class="chop-panel" id="chop-intro">
+      <div class="eyebrow">security minigame</div>
+      <h2>Ninja Chop</h2>
+      <p>The drop is locked. Chop <b class="chop-target"></b> bamboo segments to hack it open.</p>
+      <ul>
+        <li>Tap the left or right side (or ← →) to chop from that side</li>
+        <li>A branch touching you = instant fail</li>
+        <li>Each chop adds a bit of time — it drains faster the higher you go</li>
+      </ul>
+      <button class="vbtn" id="chop-start">Start ▸</button>
+    </div>
+    <div class="chop-panel" id="chop-over" hidden>
+      <div class="eyebrow" id="chop-why">branch hit</div>
+      <h2 id="chop-title">Sliced</h2>
+      <p>Score <b id="chop-final">0</b> / <span class="chop-target"></span> · Best <b id="chop-best">0</b></p>
+      <button class="vbtn" id="chop-retry">Retry ▸</button>
+    </div>
+    <div class="chop-panel" id="chop-win" hidden>
+      <div class="eyebrow">hack complete</div>
+      <h2>Unlocked</h2>
+      <p>Clean chopping. The drop is open.</p>
+    </div>
+    <button class="linkish chop-leave" id="chop-leave">back to the map</button>
+  </section>
+
+  <!-- letter -->
+  <section class="layer" id="letter-layer" hidden>
+    <div class="msg">
+      <div class="msg-head"><span class="eyebrow" id="msg-from">incoming message</span><span class="dot"></span></div>
+      <div class="msg-body" id="msg-body">
+        <h2 class="dear fade" id="dear"></h2>
+        <div id="body"></div>
+        <p class="sign fade" id="signoff"></p>
+        <p class="from fade" id="from"></p>
+        <div class="more fade" id="more-wrap"><button class="vbtn" id="more">Open the drop ▸</button></div>
+        <div class="fade"><button class="linkish back-to-map" id="letter-back">back to the map</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- gift card -->
+  <section class="layer" id="card-layer" hidden>
+    <div class="card-scene">
+      <div class="card-intro-wrap" id="card-intro-wrap" hidden>
+        <div class="eyebrow">one more thing</div>
+        <p class="card-intro" id="g-intro"></p>
+        <button class="vbtn" id="show-card">Show me ▸</button>
+      </div>
+      <div class="card-reveal" id="card-reveal">
+      <div class="card-stage">
+        <div class="shards" id="shards"></div>
+        <div class="floaty"><div class="sway"><div class="tilt" id="tilt">
+          <button class="flip" id="flip" aria-pressed="false" aria-label="Your gift card. Tap to see the code.">
+            <span class="face front" id="front"><span class="tap-chip">TAP ↻</span></span>
+            <span class="face back" id="back">
+              <span class="label">GIFT CARD CODE</span>
+              <span class="code" id="g-code"></span>
+              <span class="meta" id="g-amount"></span>
+              <span class="meta" id="g-pin" hidden>PIN <code></code></span>
+            </span>
+          </button>
+        </div></div></div>
+        <div class="card-glow"></div>
+      </div>
+      <p class="card-hint" id="card-hint">tap the card</p>
+      <div class="card-actions" id="card-actions" hidden>
+        <a class="vbtn" id="redeem" target="_blank" rel="noopener noreferrer" hidden>Redeem now ↗</a>
+        <button class="vbtn vbtn--ghost" id="copy">Copy code</button>
+      </div>
+      <p class="card-note" id="g-note" hidden></p>
+      </div>
+      <div><button class="linkish back-to-map" id="card-back">back to the map</button></div>
+      <div><button class="linkish" id="sign-out" style="margin-top:10px">sign out</button></div>
+    </div>
+  </section>
+
+<script>
+(() => {
+  "use strict";
+
+  // Injected by main.py. Everything private lives inside the ciphertext.
+  const PAYLOAD = /*__PAYLOAD__*/null;
+  const HINT = /*__HINT__*/"";
+
+  const $ = (id) => document.getElementById(id);
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, reduceMotion ? 0 : ms));
+  const ORB_COUNT = 4;
+
+  let state = "login"; // login | brief | play | minigame | opening | letter | card
+  let content = null;
+  let game = null;
+
+  /* =================== crypto =================== */
+  // Must match login_secret() in main.py.
+  const loginSecret = (user, pw) => `${user.trim().toLowerCase()}\n${pw.trim()}`;
+  const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  async function decrypt(secret) {
+    const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt: fromB64(PAYLOAD.salt), iterations: PAYLOAD.iter, hash: "SHA-256" },
+      material, { name: "AES-GCM", length: 256 }, false, ["decrypt"]
+    );
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(PAYLOAD.iv) }, key, fromB64(PAYLOAD.ct));
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+
+  /* =================== HUD helpers =================== */
+  let bubbleText = "";
+  function say(text) {
+    if (text === bubbleText) return;
+    bubbleText = text;
+    const b = $("bubble");
+    b.textContent = text;
+    b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+  }
+  function toast(text) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.textContent = text;
+    $("hud").appendChild(t);
+    setTimeout(() => t.remove(), 1300);
+  }
+  for (let i = 0; i < ORB_COUNT; i++) $("orbs").appendChild(document.createElement("i"));
+
+  /* =================== 3D world =================== */
+  function buildGame() {
+    const T = THREE;
+    const canvas = $("world");
+    const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    const mobile = Math.min(innerWidth, innerHeight) < 600;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFSoftShadowMap;
+
+    const scene = new T.Scene();
+    scene.fog = new T.Fog(0x0f1923, 32, 80);
+    const camera = new T.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+
+    let seed = 11;
+    const rand = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const pick = (a) => a[(rand() * a.length) | 0];
+    const mat = (color, extra = {}) => new T.MeshStandardMaterial({ color, flatShading: true, roughness: 0.8, ...extra });
+    const glow = (color, opacity = 1) => new T.MeshBasicMaterial({ color, transparent: opacity < 1, opacity });
+    const shadowy = (m, cast = true) => { m.castShadow = cast; m.receiveShadow = true; return m; };
+    const RED = 0xff4655, TEAL = 0x3ee6d6;
+
+    const glowTex = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 128;
+      const g = c.getContext("2d");
+      const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.3, "rgba(255,255,255,.45)"); grd.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+      return new T.CanvasTexture(c);
+    })();
+    const halo = (color, size, opacity = 0.6) => {
+      const s = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity }));
+      s.scale.setScalar(size);
+      return s;
+    };
+
+    /* lights */
+    scene.add(new T.HemisphereLight(0x6a7cb0, 0x1c1020, 0.6));
+    const moon = new T.DirectionalLight(0xc4d4ff, 0.75);
+    moon.position.set(-9, 18, -8);
+    moon.castShadow = true;
+    moon.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
+    Object.assign(moon.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 50 });
+    moon.shadow.bias = -0.0005;
+    moon.shadow.camera.updateProjectionMatrix();
+    scene.add(moon);
+
+    /* platform */
+    const R = 13;
+    const top = shadowy(new T.Mesh(new T.CylinderGeometry(R, R - 0.5, 1, 8), mat(0x2b3644, { roughness: 0.9 })), false);
+    top.position.y = -0.5;
+    scene.add(top);
+    const edge = new T.Mesh(new T.RingGeometry(R - 0.22, R - 0.05, 8, 1), glow(RED, 0.85));
+    edge.rotation.x = -Math.PI / 2; edge.rotation.z = Math.PI / 8; edge.position.y = 0.012;
+    scene.add(edge);
+    const rockGeo = new T.CylinderGeometry(R - 0.5, 1.2, 9, 8, 4);
+    const rp = rockGeo.attributes.position;
+    for (let i = 0; i < rp.count; i++) {
+      if (rp.getY(i) < 4.4) { rp.setX(i, rp.getX(i) * (0.82 + rand() * 0.36)); rp.setZ(i, rp.getZ(i) * (0.82 + rand() * 0.36)); rp.setY(i, rp.getY(i) + (rand() - 0.5) * 0.9); }
+    }
+    rockGeo.computeVertexNormals();
+    const underside = new T.Mesh(rockGeo, mat(0x1b222c));
+    underside.position.y = -5.5;
+    scene.add(underside);
+    const plateMats = [0x323e4d, 0x27313d, 0x36404c].map((c) => mat(c));
+    for (let i = 0; i < 26; i++) {
+      const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (R - 2.5);
+      const p = shadowy(new T.Mesh(new T.BoxGeometry(1 + rand() * 2, 0.04, 1 + rand() * 2), pick(plateMats)), false);
+      p.position.set(Math.cos(a) * d, 0.02, Math.sin(a) * d);
+      p.rotation.y = Math.round(rand() * 4) * (Math.PI / 4);
+      scene.add(p);
+    }
+
+    /* path: chevrons pointing at the drop */
+    const pathX = (z) => Math.sin(z * 0.32) * 2.4;
+    const START = new T.Vector3(pathX(-10.4), 0, -10.4);
+    const DROP = new T.Vector3(pathX(9.3), 0, 9.3);
+    const chevrons = [];
+    const barGeo = new T.BoxGeometry(0.6, 0.03, 0.12);
+    for (let z = -9.2; z < 7.6; z += 1.4) {
+      const g = new T.Group();
+      const m = glow(RED, 0.5);
+      const a = new T.Mesh(barGeo, m), b = new T.Mesh(barGeo, m);
+      a.position.set(-0.2, 0, 0); a.rotation.y = -0.75;
+      b.position.set(0.2, 0, 0); b.rotation.y = 0.75;
+      g.add(a, b);
+      g.position.set(pathX(z), 0.05, z);
+      g.rotation.y = Math.atan2(pathX(z + 0.5) - pathX(z - 0.5), 1);
+      scene.add(g);
+      chevrons.push(m);
+    }
+    const nearPath = (x, z, w) => Math.abs(x - pathX(z)) < w && z > -12 && z < 10.5;
+
+    /* orbs */
+    const orbSpots = [[pathX(-6), -6], [5.6, -2.6], [-5.8, 2.2], [pathX(4.8) + 0.2, 4.8]];
+    const orbGeo = new T.IcosahedronGeometry(0.26, 0);
+    const orbs = orbSpots.map(([x, z], i) => {
+      const g = new T.Group();
+      const core = new T.Mesh(orbGeo, glow(TEAL));
+      const cage = new T.Mesh(new T.IcosahedronGeometry(0.42, 0), new T.MeshBasicMaterial({ color: TEAL, wireframe: true, transparent: true, opacity: 0.5 }));
+      g.add(core, cage, halo(TEAL, 2.2, 0.55));
+      g.position.set(x, 1, z);
+      g.userData = { phase: i * 1.4, taken: false, t: 0, core, cage };
+      scene.add(g);
+      return g;
+    });
+
+    /* obstacles: crystals, pillars, cover, rocks */
+    const obstacles = [];
+    const clear = (x, z, r) =>
+      Math.hypot(x, z) < R - 1.4 && !nearPath(x, z, 2.5) &&
+      Math.hypot(START.x - x, START.z - z) > 3 && Math.hypot(DROP.x - x, DROP.z - z) > 3.8 &&
+      orbSpots.every(([ox, oz]) => Math.hypot(ox - x, oz - z) > 1.8) &&
+      obstacles.every((o) => Math.hypot(o.x - x, o.z - z) > o.r + r + 0.6);
+    const spot = (r, minD = 0) => {
+      for (let i = 0; i < 300; i++) {
+        const a = rand() * Math.PI * 2, d = minD + Math.sqrt(rand()) * (R - 1.6 - minD);
+        const x = Math.cos(a) * d, z = Math.sin(a) * d;
+        if (clear(x, z, r)) return [x, z];
+      }
+      return null;
+    };
+
+    const crystalMats = [0xcfeaff, 0x9fd2f2, 0xe9f6ff, 0x7fb8e0].map((c) => new T.MeshStandardMaterial({ color: c, emissive: 0x2a6fa8, emissiveIntensity: 0.35, roughness: 0.15, metalness: 0.1, flatShading: true, transparent: true, opacity: 0.93 }));
+    const crystals = [];
+    for (let n = 0; n < 11; n++) {
+      const s = 0.7 + rand() * 0.45, p = spot(0.6 * s);
+      if (!p) continue;
+      const g = new T.Group();
+      const count = 3 + ((rand() * 3) | 0);
+      for (let j = 0; j < count; j++) {
+        const h = 0.55 + rand() * 1.05;
+        const c = shadowy(new T.Mesh(new T.OctahedronGeometry(1, 0), pick(crystalMats)));
+        c.scale.set(0.22 + rand() * 0.15, h, 0.22 + rand() * 0.15);
+        c.position.set((rand() - 0.5) * 0.7, h * 0.6, (rand() - 0.5) * 0.7);
+        c.rotation.set((rand() - 0.5) * 0.6, rand() * 3, (rand() - 0.5) * 0.6);
+        g.add(c);
+      }
+      const h = halo(0x7fc8ff, 2.6, 0.25); h.position.y = 0.8; g.add(h);
+      g.position.set(p[0], 0, p[1]); g.scale.setScalar(s);
+      g.userData = { phase: rand() * 6, halo: h };
+      scene.add(g);
+      crystals.push(g);
+      obstacles.push({ x: p[0], z: p[1], r: 0.5 * s });
+    }
+    const pillarMat = mat(0x3a4554, { roughness: 0.6, metalness: 0.3 });
+    const stripMats = [];
+    for (let n = 0; n < 5; n++) {
+      const p = spot(0.7, 6);
+      if (!p) continue;
+      const h = 2.6 + rand() * 2.4;
+      const g = new T.Group();
+      const col = shadowy(new T.Mesh(new T.BoxGeometry(1, h, 1), pillarMat));
+      col.position.y = h / 2;
+      const cap = shadowy(new T.Mesh(new T.BoxGeometry(1.3, 0.25, 1.3), mat(0x4b5768)));
+      cap.position.y = h + 0.12;
+      const sm = glow(RED, 0.9);
+      stripMats.push(sm);
+      const strip = new T.Mesh(new T.BoxGeometry(1.02, 0.08, 1.02), sm);
+      strip.position.y = h * 0.7;
+      const strip2 = strip.clone(); strip2.position.y = h * 0.7 - 0.22;
+      g.add(col, cap, strip, strip2);
+      g.position.set(p[0], 0, p[1]);
+      g.rotation.y = rand() * Math.PI;
+      scene.add(g);
+      obstacles.push({ x: p[0], z: p[1], r: 0.75 });
+    }
+    const coverMat = mat(0x4a5666, { roughness: 0.7 }), coverEdge = mat(0x6b7787);
+    for (let n = 0; n < 6; n++) {
+      const p = spot(0.8);
+      if (!p) continue;
+      const g = new T.Group();
+      const box = shadowy(new T.Mesh(new T.BoxGeometry(1.3, 1.1, 1.3), coverMat));
+      box.position.y = 0.55;
+      const trim = shadowy(new T.Mesh(new T.BoxGeometry(1.36, 0.12, 1.36), coverEdge));
+      trim.position.y = 1.1;
+      g.add(box, trim);
+      if (rand() < 0.5) {
+        const b2 = shadowy(new T.Mesh(new T.BoxGeometry(0.9, 0.8, 0.9), coverMat));
+        b2.position.set(0.95, 0.4, 0.2); b2.rotation.y = 0.4;
+        g.add(b2);
+      }
+      g.position.set(p[0], 0, p[1]);
+      g.rotation.y = rand() * Math.PI;
+      scene.add(g);
+      obstacles.push({ x: p[0], z: p[1], r: 0.95 });
+    }
+    const rockMat = mat(0x3a4350);
+    for (let n = 0; n < 8; n++) {
+      const s = 0.5 + rand() * 0.6, p = spot(0.5 * s);
+      if (!p) continue;
+      const rock = shadowy(new T.Mesh(new T.DodecahedronGeometry(0.6, 0), rockMat));
+      rock.position.set(p[0], 0.2 * s, p[1]);
+      rock.scale.set(s, s * 0.7, s);
+      rock.rotation.set(rand(), rand() * 6, rand());
+      scene.add(rock);
+      obstacles.push({ x: p[0], z: p[1], r: 0.55 * s });
+    }
+
+    /* floating debris */
+    const debris = [];
+    const debrisMat = mat(0x232b36);
+    for (let i = 0; i < 16; i++) {
+      const m = new T.Mesh(new T.DodecahedronGeometry(0.5 + rand() * 1.2, 0), i % 5 === 0 ? pick(crystalMats) : debrisMat);
+      m.userData = { a: rand() * Math.PI * 2, r: 17 + rand() * 12, y: -6 + rand() * 12, speed: 0.01 + rand() * 0.02, spin: rand() - 0.5 };
+      scene.add(m);
+      debris.push(m);
+    }
+
+    /* embers */
+    const EMBER_N = mobile ? 70 : 130;
+    const emberGeo = new T.BufferGeometry();
+    const emberPos = new Float32Array(EMBER_N * 3);
+    const emberSeed = [];
+    for (let i = 0; i < EMBER_N; i++) emberSeed.push({ x: (rand() - 0.5) * 34, z: (rand() - 0.5) * 34, y: rand() * 12 - 2, s: 0.3 + rand() * 0.7, w: rand() * 6 });
+    emberGeo.setAttribute("position", new T.BufferAttribute(emberPos, 3));
+    scene.add(new T.Points(emberGeo, new T.PointsMaterial({ map: glowTex, color: 0xff6a5a, size: 0.22, transparent: true, depthWrite: false, blending: T.AdditiveBlending })));
+
+    /* hero: little agent bot */
+    const hero = new T.Group();
+    const heroBody = new T.Group();
+    hero.add(heroBody);
+    const shell = new T.MeshStandardMaterial({ color: 0x4a5668, roughness: 0.35, metalness: 0.45 });
+    const dark = new T.MeshStandardMaterial({ color: 0x1f262f, roughness: 0.5, metalness: 0.3 });
+    const body = shadowy(new T.Mesh(new T.SphereGeometry(0.62, 32, 22), shell));
+    body.scale.set(1, 1.05, 0.95);
+    body.position.y = 0.78;
+    heroBody.add(body);
+    const visor = new T.Mesh(new T.SphereGeometry(0.625, 32, 8, Math.PI / 2 - 0.95, 1.9, 1.12, 0.5), glow(0x150b12));
+    visor.scale.copy(body.scale); visor.position.copy(body.position);
+    heroBody.add(visor);
+    const visorEdge = new T.Mesh(new T.SphereGeometry(0.628, 32, 2, Math.PI / 2 - 0.95, 1.9, 1.6, 0.04), glow(RED));
+    visorEdge.scale.copy(body.scale); visorEdge.position.copy(body.position);
+    heroBody.add(visorEdge);
+    const eyes = [-1, 1].map((side) => {
+      const e = new T.Mesh(new T.BoxGeometry(0.13, 0.07, 0.04), glow(RED));
+      e.position.set(side * 0.17, 0.93, 0.585);
+      e.rotation.y = side * 0.28;
+      heroBody.add(e);
+      return e;
+    });
+    const eyeGlow = halo(RED, 1.1, 0.35); eyeGlow.position.set(0, 0.93, 0.7); heroBody.add(eyeGlow);
+    const antenna = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.36, 6), dark);
+    antenna.position.set(0.22, 1.5, -0.05); antenna.rotation.z = -0.25;
+    const tip = new T.Mesh(new T.SphereGeometry(0.06, 10, 8), glow(RED));
+    tip.position.set(0.27, 1.69, -0.05);
+    heroBody.add(antenna, tip);
+    const pack = shadowy(new T.Mesh(new T.BoxGeometry(0.5, 0.5, 0.25), dark));
+    pack.position.set(0, 0.78, -0.6);
+    const packLight = new T.Mesh(new T.BoxGeometry(0.3, 0.05, 0.02), glow(TEAL));
+    packLight.position.set(0, 0.88, -0.73);
+    heroBody.add(pack, packLight);
+    const arms = [-1, 1].map((side) => {
+      const a = shadowy(new T.Mesh(new T.SphereGeometry(0.14, 12, 10), dark));
+      a.position.set(side * 0.62, 0.7, 0.05);
+      a.userData.side = side;
+      heroBody.add(a);
+      return a;
+    });
+    const feet = [-1, 1].map((side) => {
+      const f = shadowy(new T.Mesh(new T.SphereGeometry(0.17, 12, 10), dark));
+      f.scale.set(1, 0.6, 1.35);
+      f.position.set(side * 0.26, 0.1, 0.05);
+      f.userData.side = side;
+      hero.add(f);
+      return f;
+    });
+    hero.position.copy(START);
+    scene.add(hero);
+
+    /* the drop */
+    const drop = new T.Group();
+    const metal = new T.MeshStandardMaterial({ color: 0x2e3845, roughness: 0.4, metalness: 0.6, flatShading: true });
+    const frameMat = new T.MeshStandardMaterial({ color: 0x5a6676, roughness: 0.4, metalness: 0.6, flatShading: true });
+    const W = 1.8, H = 1.0, D = 1.25;
+    const base = shadowy(new T.Mesh(new T.BoxGeometry(W, H, D), metal));
+    base.position.y = H / 2;
+    drop.add(base);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+      const post = shadowy(new T.Mesh(new T.BoxGeometry(0.12, H + 0.02, 0.12), frameMat));
+      post.position.set(sx * (W / 2 - 0.02), H / 2, sz * (D / 2 - 0.02));
+      drop.add(post);
+    });
+    const dropRed = glow(RED);
+    [0.3, 0.55].forEach((y) => {
+      const s = new T.Mesh(new T.BoxGeometry(W - 0.2, 0.05, 0.02), dropRed);
+      s.position.set(0, y, D / 2 + 0.01);
+      drop.add(s);
+    });
+    const lidPivot = new T.Group();
+    lidPivot.position.set(0, H, -D / 2);
+    const lid = shadowy(new T.Mesh(new T.BoxGeometry(W + 0.08, 0.24, D + 0.08), frameMat));
+    lid.position.set(0, 0.12, D / 2);
+    const lidPanel = new T.Mesh(new T.BoxGeometry(0.9, 0.02, 0.5), dropRed);
+    lidPanel.position.set(0, 0.25, D / 2);
+    lidPivot.add(lid, lidPanel);
+    drop.add(lidPivot);
+    const screenMat = glow(RED);
+    const lockPanel = shadowy(new T.Mesh(new T.BoxGeometry(0.42, 0.3, 0.08), frameMat));
+    lockPanel.position.set(0, H - 0.22, D / 2 + 0.05);
+    const screen = new T.Mesh(new T.PlaneGeometry(0.3, 0.18), screenMat);
+    screen.position.z = 0.045;
+    lockPanel.add(screen);
+    drop.add(lockPanel);
+    const inner = new T.Mesh(new T.PlaneGeometry(W - 0.1, D - 0.1), glow(0xbffcf6));
+    inner.rotation.x = -Math.PI / 2; inner.position.y = H + 0.01;
+    drop.add(inner);
+    drop.position.copy(DROP);
+    drop.rotation.y = Math.PI;
+    scene.add(drop);
+    obstacles.push({ x: DROP.x, z: DROP.z, r: 1.15 });
+
+    const dropLight = new T.PointLight(RED, 1.2, 8);
+    dropLight.position.set(DROP.x, 1.8, DROP.z - 0.8);
+    scene.add(dropLight);
+    const dropHalo = halo(RED, 4.4, 0.5);
+    dropHalo.position.set(DROP.x, 0.8, DROP.z);
+    scene.add(dropHalo);
+    const ring = new T.Mesh(new T.RingGeometry(1.7, 1.82, 48), glow(RED, 0.6));
+    ring.rotation.x = -Math.PI / 2; ring.position.set(DROP.x, 0.03, DROP.z);
+    scene.add(ring);
+    const beam = new T.Mesh(
+      new T.CylinderGeometry(0.3, 0.95, 16, 24, 1, true),
+      new T.MeshBasicMaterial({ color: TEAL, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide })
+    );
+    beam.position.set(DROP.x, 8.6, DROP.z);
+    scene.add(beam);
+
+    /* tap marker */
+    const marker = new T.Mesh(new T.RingGeometry(0.3, 0.4, 4), glow(TEAL, 0));
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.y = 0.05;
+    scene.add(marker);
+
+    /* particles */
+    const partGeo = new T.TetrahedronGeometry(0.1, 0);
+    const parts = [];
+    function burst(pos, n, colors, power = 1) {
+      if (reduceMotion) return;
+      for (let i = 0; i < n; i++) {
+        const m = new T.Mesh(partGeo, glow(colors[i % colors.length], 0.999));
+        m.position.copy(pos);
+        const a = rand() * Math.PI * 2;
+        m.userData = { v: new T.Vector3(Math.cos(a) * (1 + rand() * 3) * power, (3 + rand() * 5) * power, Math.sin(a) * (1 + rand() * 3) * power), life: 0, max: 0.8 + rand() * 0.8, spin: rand() * 12 };
+        m.scale.setScalar(0.6 + rand() * 1.2);
+        scene.add(m);
+        parts.push(m);
+      }
+    }
+
+    /* input */
+    const keys = new Set();
+    addEventListener("keydown", (e) => { if (e.target.tagName !== "INPUT") keys.add(e.key.toLowerCase()); });
+    addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+    addEventListener("blur", () => keys.clear());
+    let target = null, down = null;
+    const ray = new T.Raycaster(), ndc = new T.Vector2(), ground = new T.Plane(new T.Vector3(0, 1, 0), 0);
+    canvas.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; });
+    canvas.addEventListener("pointerup", (e) => {
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) return;
+      down = null;
+      if (state !== "play") return;
+      ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      if (ray.intersectObject(drop, true).length) {
+        if (hero.position.distanceTo(DROP) < 3.3) return tapDrop();
+        target = new T.Vector3(DROP.x, 0, DROP.z - 1.9);
+      } else {
+        const p = new T.Vector3();
+        if (!ray.ray.intersectPlane(ground, p)) return;
+        if (p.length() > R - 0.8) p.setLength(R - 0.8);
+        target = p;
+      }
+      marker.position.set(target.x, 0.05, target.z);
+      marker.userData.t = 0;
+    });
+
+    /* drop interaction */
+    let dropShake = 0, flash = 0, openT = -1, celebrate = -1, shake = 0, onOpened = null, onReopen = null, onChallenge = null, exploring = false;
+    function tapDrop() {
+      if (openT >= 0) { if (exploring && onReopen) onReopen(); return; }
+      dropShake = 0.4; flash = 1; shake = 0.14;
+      burst(new T.Vector3(DROP.x, 1, DROP.z - 0.7), 14, [RED, 0xffffff, 0xff9a8a], 0.7);
+      if (onChallenge) onChallenge();
+    }
+    function openDrop() {
+      state = "opening";
+      openT = 0;
+      celebrate = 0;
+      shake = 0.35;
+      target = new T.Vector3(DROP.x - 2.2, 0, DROP.z - 1.1);
+      [screenMat, dropRed, ring.material, dropHalo.material].forEach((m) => m.color.setHex(TEAL));
+      dropLight.color.setHex(TEAL);
+      setTimeout(() => burst(new T.Vector3(DROP.x, 1.2, DROP.z), 110, [TEAL, 0xffffff, RED, 0xbffcf6], 1.3), 300);
+      setTimeout(() => onOpened && onOpened(), 2700);
+    }
+
+    function collide(p) {
+      for (const o of obstacles) {
+        const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = o.r + 0.45;
+        if (d < min && d > 0.0001) { p.x = o.x + (dx / d) * min; p.z = o.z + (dz / d) * min; }
+      }
+      const r = Math.hypot(p.x, p.z);
+      if (r > R - 0.8) { p.x *= (R - 0.8) / r; p.z *= (R - 0.8) / r; }
+    }
+
+    /* camera */
+    const camOffset = new T.Vector3(5.5, 7.8, -9.5);
+    const fwd = new T.Vector3(-camOffset.x, 0, -camOffset.z).normalize();
+    const right = new T.Vector3(-fwd.z, 0, fwd.x);
+    const look = new T.Vector3();
+    camera.position.set(26, 15, 0);
+
+    const easeOutBack = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+    const turnTo = (from, to, k) => from + ((((to - from + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * k);
+
+    const clock = new T.Clock();
+    let walkPhase = 0, heading = 0, blinkAt = 2, nearSaid = false, orbsTaken = 0, time = 0, playStart = 0;
+    function frame() {
+      const dt = Math.min(clock.getDelta(), 0.05);
+      time += dt;
+
+      let moving = false;
+      if (state === "play" || (state === "opening" && target)) {
+        const kx = (keys.has("arrowright") || keys.has("d") ? 1 : 0) - (keys.has("arrowleft") || keys.has("a") ? 1 : 0);
+        const kz = (keys.has("arrowup") || keys.has("w") ? 1 : 0) - (keys.has("arrowdown") || keys.has("s") ? 1 : 0);
+        let dir = null;
+        if (state === "play" && (kx || kz)) { dir = fwd.clone().multiplyScalar(kz).add(right.clone().multiplyScalar(kx)); target = null; }
+        else if (target) {
+          dir = target.clone().sub(hero.position).setY(0);
+          if (dir.length() < 0.15) { dir = null; target = null; }
+        }
+        if (dir) {
+          dir.normalize();
+          hero.position.addScaledVector(dir, 4.4 * dt);
+          collide(hero.position);
+          heading = turnTo(heading, Math.atan2(dir.x, dir.z), Math.min(1, dt * 12));
+          moving = true;
+        }
+        if (state === "play") {
+          orbs.forEach((o) => {
+            if (o.userData.taken) return;
+            if (Math.hypot(o.position.x - hero.position.x, o.position.z - hero.position.z) < 1) {
+              o.userData.taken = true;
+              orbsTaken++;
+              burst(o.position.clone(), 20, [TEAL, 0xffffff]);
+              $("orbs").children[orbsTaken - 1].classList.add("on");
+              toast(orbsTaken === ORB_COUNT ? "ALL ORBS" : "+ ORB");
+            }
+          });
+          const d = hero.position.distanceTo(DROP);
+          if (d < 3.3 && openT < 0) { say("the drop is locked — tap it to hack in"); nearSaid = true; }
+          else if (d >= 3.3 && nearSaid && openT < 0) { say("follow the arrows to the drop"); nearSaid = false; }
+        }
+      }
+
+      // hero animation
+      if (moving) walkPhase += dt * 13;
+      const sw = moving ? Math.sin(walkPhase) : 0;
+      feet.forEach((f) => { const s = f.userData.side * sw; f.position.z = 0.05 + s * 0.22; f.position.y = 0.1 + Math.max(0, s) * 0.14; });
+      arms.forEach((a) => { a.position.z = 0.05 - a.userData.side * sw * 0.18; a.position.y = 0.7 + Math.abs(sw) * 0.03; });
+      heroBody.position.y = moving ? Math.abs(Math.sin(walkPhase)) * 0.08 : Math.sin(time * 2) * 0.03;
+      heroBody.rotation.z = moving ? sw * 0.05 : 0;
+      heroBody.rotation.x = moving ? 0.1 : 0;
+      tip.material.color.setHex(Math.sin(time * 5) > 0 ? RED : 0x5a1a22);
+      if (time > blinkAt) { eyes.forEach((e) => (e.scale.y = 0.2)); if (time > blinkAt + 0.1) { eyes.forEach((e) => (e.scale.y = 1)); blinkAt = time + 2.5 + Math.random() * 3; } }
+      if (celebrate >= 0) celebrate += dt;
+      if (celebrate >= 0 && !target) {
+        const toCam = Math.atan2(camera.position.x - hero.position.x, camera.position.z - hero.position.z);
+        heading = turnTo(heading, toCam, Math.min(1, dt * 6));
+        const hop = celebrate < 3 ? Math.abs(Math.sin(celebrate * 6)) * 0.5 : 0;
+        hero.position.y = hop;
+        arms.forEach((a) => (a.position.y = 0.85 + hop * 0.5));
+      }
+      hero.rotation.y = heading;
+
+      // drop
+      if (dropShake > 0) {
+        dropShake -= dt;
+        drop.rotation.z = Math.sin(dropShake * 60) * 0.05 * (dropShake / 0.4);
+        drop.position.y = Math.max(0, Math.sin((0.4 - dropShake) * 8)) * 0.15;
+      } else { drop.rotation.z = 0; drop.position.y = 0; }
+      flash = Math.max(0, flash - dt * 2);
+      dropLight.intensity = 1.2 + flash * 2 + Math.sin(time * 3) * 0.3 + (openT >= 0 ? Math.min(1, openT) * 2 : 0);
+      dropHalo.material.opacity = 0.4 + Math.sin(time * 2.4) * 0.1;
+      ring.scale.setScalar(1 + Math.sin(time * 2) * 0.04);
+      if (openT >= 0) {
+        openT = Math.min(1.5, openT + dt);
+        lidPivot.rotation.x = -2.0 * easeOutBack(Math.min(1, openT));
+        beam.material.opacity = Math.min(0.22, openT * 0.3) * (0.85 + Math.sin(time * 5) * 0.15);
+        dropHalo.scale.setScalar(4.4 + Math.min(1, openT) * 3);
+      }
+      beam.rotation.y += dt * 0.5;
+      chevrons.forEach((m, i) => (m.opacity = 0.18 + Math.max(0, Math.sin(time * 4 - i * 0.6)) * 0.75));
+      stripMats.forEach((m, i) => (m.opacity = 0.6 + Math.sin(time * 3 + i) * 0.35));
+
+      // world
+      orbs.forEach((o) => {
+        const u = o.userData;
+        if (u.taken) {
+          u.t += dt;
+          o.position.y += dt * 5;
+          o.scale.setScalar(Math.max(0, 1 - u.t * 3));
+          if (u.t > 0.35) o.visible = false;
+        } else {
+          u.core.rotation.y = time * 2 + u.phase; u.core.rotation.x = time;
+          u.cage.rotation.y = -time * 1.2; u.cage.rotation.z = time * 0.7;
+          o.position.y = 1 + Math.sin(time * 2.4 + u.phase) * 0.18;
+        }
+      });
+      crystals.forEach((c) => (c.userData.halo.material.opacity = 0.2 + Math.sin(time * 1.5 + c.userData.phase) * 0.08));
+      debris.forEach((m) => {
+        const u = m.userData;
+        u.a += dt * u.speed;
+        m.position.set(Math.cos(u.a) * u.r, u.y + Math.sin(time * 0.5 + u.a * 4) * 0.4, Math.sin(u.a) * u.r);
+        m.rotation.x += dt * u.spin; m.rotation.y += dt * u.spin * 0.7;
+      });
+      for (let i = 0; i < EMBER_N; i++) {
+        const s = emberSeed[i];
+        s.y += dt * s.s;
+        if (s.y > 11) s.y = -2;
+        emberPos[i * 3] = s.x + Math.sin(time * 0.6 + s.w) * 0.6;
+        emberPos[i * 3 + 1] = s.y;
+        emberPos[i * 3 + 2] = s.z + Math.cos(time * 0.5 + s.w) * 0.6;
+      }
+      emberGeo.attributes.position.needsUpdate = true;
+      if (marker.userData.t !== undefined) {
+        marker.userData.t += dt;
+        const t = marker.userData.t;
+        marker.material.opacity = Math.max(0, 0.9 - t * 1.5);
+        marker.scale.setScalar(1 + t * 1.2);
+        marker.rotation.z = t * 2;
+      }
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i], u = p.userData;
+        u.life += dt;
+        u.v.y -= 9 * dt;
+        p.position.addScaledVector(u.v, dt);
+        p.rotation.x += dt * u.spin; p.rotation.y += dt * u.spin;
+        p.material.opacity = Math.max(0, 1 - u.life / u.max);
+        if (u.life > u.max) { scene.remove(p); p.material.dispose(); parts.splice(i, 1); }
+      }
+
+      // camera
+      if (state === "login" || state === "brief") {
+        const a = time * 0.1;
+        camera.position.set(Math.cos(a) * 27, 14 + Math.sin(time * 0.3) * 1.5, Math.sin(a) * 27);
+        look.set(0, -1, 0);
+      } else {
+        let want, wantLook;
+        if (openT >= 0 && !exploring) {
+          want = new T.Vector3(DROP.x + 3.8, 3.4, DROP.z - 5.4);
+          wantLook = new T.Vector3(DROP.x, 1.3, DROP.z);
+        } else {
+          const portrait = camera.aspect < 0.8 ? 1.35 : 1;
+          want = hero.position.clone().setY(0).addScaledVector(camOffset, portrait);
+          wantLook = hero.position.clone().setY(0.8).addScaledVector(fwd, 2);
+        }
+        const k = 1 - Math.exp(-dt * (openT >= 0 && !exploring ? 1.8 : time - playStart < 2.2 ? 1.4 : 3.2));
+        camera.position.lerp(want, k);
+        look.lerp(wantLook, k);
+      }
+      if (shake > 0) {
+        shake -= dt;
+        camera.position.x += (Math.random() - 0.5) * shake * 0.6;
+        camera.position.y += (Math.random() - 0.5) * shake * 0.6;
+      }
+      camera.lookAt(look);
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+
+    addEventListener("resize", () => {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    });
+    requestAnimationFrame(frame);
+
+    return {
+      start() { playStart = time; },
+      onOpened(fn) { onOpened = fn; },
+      onReopen(fn) { onReopen = fn; },
+      onChallenge(fn) { onChallenge = fn; },
+      unlock() { openDrop(); },
+      // Leave the loot screens and walk around again; the drop stays open.
+      explore() { exploring = true; celebrate = -1; target = null; hero.position.y = 0; playStart = time; },
+    };
+  }
+
+  try {
+    if (!window.THREE) throw new Error("three.js missing");
+    game = buildGame();
+  } catch (e) {
+    document.body.classList.add("no3d");
+    game = null;
+  }
+
+
+  /* =================== ninja chop minigame =================== */
+  // Timberman-style: chop from the left or right, never let a branch reach your side.
+  // Only gates the crate opening; it never sees the decrypted content.
+  function createChop({ onWin, onLeave }) {
+    const TARGET = 40;
+    const layer = $("chop-layer"), cv = $("chop-canvas"), g = cv.getContext("2d");
+    document.querySelectorAll(".chop-target").forEach((el) => (el.textContent = TARGET));
+    let W = 0, H = 0, sw = 0, sh = 0, baseY = 0;
+    let segs = [], side = -1, score = 0, time = 1, phase = "intro", started = false, best = 0;
+    let fall = 0, chopT = 1, hurt = 0, shakeT = 0, flying = [], bits = [], last = 0, raf = 0, clock = 0;
+
+    // A branch is always followed by an empty segment, so every run is beatable.
+    const branchChance = () => Math.min(0.75, 0.4 + score * 0.009);
+    function nextSeg() {
+      const prev = segs[segs.length - 1];
+      if (segs.length < 3 || prev.b !== 0) return { b: 0 };
+      return { b: Math.random() < branchChance() ? (Math.random() < 0.5 ? -1 : 1) : 0 };
+    }
+    function reset() {
+      segs = []; flying = []; bits = [];
+      score = 0; time = 1; side = -1; started = false; fall = 0; chopT = 1; hurt = 0;
+      while (segs.length < 12) segs.push(nextSeg());
+      hud();
+    }
+    function fit() {
+      const d = Math.min(devicePixelRatio || 1, 2);
+      W = innerWidth; H = innerHeight;
+      cv.width = W * d; cv.height = H * d;
+      g.setTransform(d, 0, 0, d, 0, 0);
+      sw = Math.min(118, W * 0.24);
+      sh = sw * 0.7;
+      baseY = H * 0.8;
+    }
+    function hud() {
+      $("chop-score").textContent = score;
+      $("chop-bar").style.transform = `scaleX(${Math.max(0, time)})`;
+      $("chop-time").classList.toggle("low", started && time < 0.25);
+    }
+    function panel(id) { ["chop-intro", "chop-over", "chop-win"].forEach((p) => ($(p).hidden = p !== id)); }
+
+    function tap(s) {
+      if (phase !== "run") return;
+      started = true;
+      side = s;
+      if (segs[0].b === s) return fail("branch");
+      const piece = segs.shift();
+      segs.push(nextSeg());
+      flying.push({ b: piece.b, x: W / 2, y: baseY - sh, vx: -s * (520 + Math.random() * 200), vy: -380 - Math.random() * 160, rot: 0, vr: -s * (7 + Math.random() * 4), life: 0 });
+      for (let i = 0; i < 6; i++) bits.push({ x: W / 2 + s * sw * 0.45, y: baseY - sh * 0.5, vx: -s * (80 + Math.random() * 260), vy: -120 - Math.random() * 300, life: 0, c: Math.random() < 0.5 ? "#7fd39a" : "#e8f5c8" });
+      fall = 1; chopT = 0;
+      score++;
+      time = Math.min(1, time + 0.095);
+      hud();
+      if (segs[0].b === s) return fail("branch");
+      if (score >= TARGET) win();
+    }
+    function fail(why) {
+      phase = "over";
+      hurt = 1; shakeT = 0.45;
+      best = Math.max(best, score);
+      $("chop-why").textContent = why === "branch" ? "branch hit" : "time up";
+      $("chop-title").textContent = why === "branch" ? "Sliced" : "Too slow";
+      $("chop-final").textContent = score;
+      $("chop-best").textContent = best;
+      setTimeout(() => { if (phase === "over") panel("chop-over"); }, 650);
+    }
+    function win() {
+      phase = "win";
+      for (let i = 0; i < 40; i++) bits.push({ x: W / 2, y: baseY - sh * 2, vx: (Math.random() - 0.5) * 700, vy: -200 - Math.random() * 500, life: 0, c: ["#3ee6d6", "#ece8e1", "#ff4655"][i % 3] });
+      setTimeout(() => panel("chop-win"), 400);
+      setTimeout(() => { close(); onWin(); }, 2000);
+    }
+    function start() { reset(); phase = "run"; panel(null); }
+
+    /* drawing */
+    function segment(x, y, b) {
+      const grd = g.createLinearGradient(x, 0, x + sw, 0);
+      grd.addColorStop(0, "#1d4a31"); grd.addColorStop(0.3, "#4c9e66"); grd.addColorStop(0.65, "#2f6f48"); grd.addColorStop(1, "#173d28");
+      g.fillStyle = grd; g.fillRect(x, y, sw, sh);
+      g.fillStyle = "rgba(255,255,255,.1)"; g.fillRect(x + sw * 0.22, y, sw * 0.07, sh);
+      g.fillStyle = "#6cc287"; g.fillRect(x - 3, y + sh - 7, sw + 6, 5);
+      g.fillStyle = "#123020"; g.fillRect(x - 3, y + sh - 2, sw + 6, 2);
+      if (!b) return;
+      const bx = b < 0 ? x : x + sw, by = y + sh * 0.55, ex = bx + b * sw * 1.15, ey = y + sh * 0.25;
+      g.strokeStyle = "#1e3d2b"; g.lineWidth = sh * 0.2; g.lineCap = "round";
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke();
+      g.fillStyle = "#2e6b45";
+      for (let k = 1; k <= 3; k++) {
+        const lx = bx + (ex - bx) * (k / 3.4), ly = by + (ey - by) * (k / 3.4);
+        g.beginPath(); g.ellipse(lx, ly - sh * 0.16, sh * 0.22, sh * 0.09, b * -0.5, 0, Math.PI * 2); g.fill();
+      }
+      g.save(); g.shadowColor = "#ff4655"; g.shadowBlur = 14; g.fillStyle = "#ff4655";
+      g.beginPath(); g.arc(ex, ey, sh * 0.09, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    function ninja(t) {
+      const r = sw * 0.3, nx = W / 2 + side * (sw / 2 + r * 1.9), ny = baseY - r * 1.08, face = -side;
+      const lunge = chopT < 1 ? Math.sin(chopT * Math.PI) * r * 0.35 * face : 0;
+      g.save();
+      g.translate(nx + lunge, ny);
+      // headband tails
+      g.strokeStyle = "#ff4655"; g.lineWidth = r * 0.16; g.lineCap = "round";
+      for (let k = 0; k < 2; k++) {
+        g.beginPath(); g.moveTo(-face * r * 0.7, -r * 0.45);
+        g.quadraticCurveTo(-face * r * 1.3, -r * (0.55 + k * 0.25) + Math.sin(t * 14 + k) * r * 0.15, -face * r * 1.8, -r * (0.3 + k * 0.35) + Math.sin(t * 12 + k * 2) * r * 0.25);
+        g.stroke();
+      }
+      // katana on the back
+      if (chopT >= 1) {
+        g.strokeStyle = "#c9d2dc"; g.lineWidth = r * 0.08;
+        g.beginPath(); g.moveTo(-face * r * 0.2, r * 0.6); g.lineTo(-face * r * 1.1, -r * 1.1); g.stroke();
+        g.strokeStyle = "#ff4655"; g.lineWidth = r * 0.14;
+        g.beginPath(); g.moveTo(-face * r * 0.05, r * 0.85); g.lineTo(-face * r * 0.25, r * 0.5); g.stroke();
+      }
+      // feet + body
+      g.fillStyle = "#1a2029";
+      g.beginPath(); g.ellipse(-r * 0.45, r * 0.95, r * 0.32, r * 0.18, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(r * 0.45, r * 0.95, r * 0.32, r * 0.18, 0, 0, Math.PI * 2); g.fill();
+      const body = g.createRadialGradient(-r * 0.3, -r * 0.4, r * 0.1, 0, 0, r * 1.1);
+      body.addColorStop(0, "#5b6a7e"); body.addColorStop(1, "#1e252e");
+      g.fillStyle = body; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+      // visor + eyes
+      g.fillStyle = "#12090f";
+      g.beginPath(); g.ellipse(face * r * 0.25, -r * 0.12, r * 0.7, r * 0.3, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.shadowColor = "#ff4655"; g.shadowBlur = 10; g.fillStyle = "#ff4655";
+      g.fillRect(face * r * 0.12 - r * 0.12, -r * 0.2, r * 0.22, r * 0.12);
+      g.fillRect(face * r * 0.52 - r * 0.12, -r * 0.2, r * 0.22, r * 0.12);
+      g.restore();
+      // headband
+      g.fillStyle = "#ff4655"; g.fillRect(-r * 0.95, -r * 0.62, r * 1.9, r * 0.17);
+      if (hurt > 0) { g.globalAlpha = hurt * 0.7; g.fillStyle = "#ff4655"; g.beginPath(); g.arc(0, 0, r * 1.05, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
+      g.restore();
+      // slash arc
+      if (chopT < 1) {
+        const cx = W / 2 + side * sw * 0.5, cy = baseY - sh * 0.5, a = 1 - chopT;
+        g.save(); g.globalAlpha = a; g.lineCap = "round";
+        g.shadowColor = "#3ee6d6"; g.shadowBlur = 18;
+        g.strokeStyle = "#e9fffd"; g.lineWidth = 5;
+        g.beginPath();
+        if (side < 0) g.arc(cx - sw * 0.2, cy, sw * 0.75, -0.9, 0.9); else g.arc(cx + sw * 0.2, cy, sw * 0.75, Math.PI - 0.9, Math.PI + 0.9);
+        g.stroke(); g.restore();
+      }
+    }
+    function draw(t) {
+      g.clearRect(0, 0, W, H);
+      g.save();
+      if (shakeT > 0) g.translate((Math.random() - 0.5) * 16 * shakeT, (Math.random() - 0.5) * 16 * shakeT);
+      // ground
+      const gl = g.createLinearGradient(0, baseY, 0, H);
+      gl.addColorStop(0, "#1c2632"); gl.addColorStop(1, "#090d13");
+      g.fillStyle = gl; g.fillRect(0, baseY, W, H - baseY);
+      g.fillStyle = "#ff4655"; g.globalAlpha = 0.7; g.fillRect(0, baseY, W, 2); g.globalAlpha = 1;
+      // stalk
+      const x0 = W / 2 - sw / 2;
+      for (let i = segs.length - 1; i >= 0; i--) {
+        const y = baseY - (i + 1) * sh - fall * sh;
+        if (y < -sh * 2) continue;
+        segment(x0, y, segs[i].b);
+      }
+      g.fillStyle = "#3d2a1c"; g.fillRect(x0 - 6, baseY - 4, sw + 12, 10);
+      const fade = g.createLinearGradient(0, 0, 0, H * 0.35);
+      fade.addColorStop(0, "rgba(6,10,15,1)"); fade.addColorStop(1, "rgba(6,10,15,0)");
+      g.fillStyle = fade; g.fillRect(0, 0, W, H * 0.35);
+      // flying pieces
+      flying.forEach((f) => {
+        g.save(); g.globalAlpha = Math.max(0, 1 - f.life * 1.4);
+        g.translate(f.x, f.y + sh / 2); g.rotate(f.rot); segment(-sw / 2, -sh / 2, f.b); g.restore();
+      });
+      ninja(t);
+      bits.forEach((b) => { g.globalAlpha = Math.max(0, 1 - b.life * 1.5); g.fillStyle = b.c; g.fillRect(b.x, b.y, 4, 4); });
+      g.globalAlpha = 1;
+      if (phase === "run" && !started) {
+        g.fillStyle = "rgba(236,232,225,.85)"; g.font = "600 15px 'Chakra Petch', sans-serif"; g.textAlign = "center";
+        g.fillText("TAP LEFT OR RIGHT TO START", W / 2, baseY + 46);
+      }
+      g.restore();
+    }
+    function loop(ts) {
+      const dt = Math.min(0.05, (ts - (last || ts)) / 1000);
+      last = ts; clock += dt;
+      if (phase === "run" && started) {
+        time -= (0.16 + score * 0.0085) * dt;
+        if (time <= 0) { time = 0; fail("time"); }
+        hud();
+      }
+      fall = Math.max(0, fall - dt * 14);
+      chopT = Math.min(1, chopT + dt * 7);
+      hurt = Math.max(0, hurt - dt * 1.5);
+      shakeT = Math.max(0, shakeT - dt);
+      flying.forEach((f) => { f.life += dt; f.vy += 1800 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt; });
+      flying = flying.filter((f) => f.life < 0.8);
+      bits.forEach((b) => { b.life += dt; b.vy += 1200 * dt; b.x += b.vx * dt; b.y += b.vy * dt; });
+      bits = bits.filter((b) => b.life < 0.7);
+      draw(clock);
+      raf = requestAnimationFrame(loop);
+    }
+
+    function open() { layer.hidden = false; fit(); reset(); phase = "intro"; panel("chop-intro"); last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); }
+    function close() { layer.hidden = true; cancelAnimationFrame(raf); phase = "intro"; }
+
+    cv.addEventListener("pointerdown", (e) => { e.preventDefault(); tap(e.clientX < W / 2 ? -1 : 1); });
+    addEventListener("keydown", (e) => {
+      if (layer.hidden || e.repeat) return;
+      const k = e.key.toLowerCase();
+      if (k === "arrowleft" || k === "a") { e.preventDefault(); tap(-1); }
+      else if (k === "arrowright" || k === "d") { e.preventDefault(); tap(1); }
+      else if ((k === "enter" || k === " ") && (phase === "intro" || phase === "over")) { e.preventDefault(); start(); }
+    });
+    addEventListener("resize", () => { if (!layer.hidden) fit(); });
+    $("chop-start").addEventListener("click", start);
+    $("chop-retry").addEventListener("click", start);
+    $("chop-leave").addEventListener("click", () => { close(); onLeave(); });
+
+    return { open, close, peek: () => ({ branches: segs.slice(0, 3).map((s) => s.b), side, score, phase }), tap };
+  }
+
+  /* =================== login =================== */
+  if (HINT) { $("hint").hidden = false; $("hint").querySelector("b").textContent = HINT; }
+  setTimeout(() => $("user").focus(), 400);
+
+  let misses = 0;
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const user = $("user").value, pw = $("pw").value;
+    const status = $("status");
+    if (!user.trim() || !pw.trim()) { status.className = "status error"; status.textContent = "enter username and password"; return; }
+    if (!PAYLOAD || !window.crypto || !crypto.subtle) {
+      status.className = "status error";
+      status.textContent = PAYLOAD ? "browser not supported — use chrome or safari over https" : "page not built yet (run main.py)";
+      return;
+    }
+    $("login-btn").disabled = true;
+    status.className = "status";
+    status.textContent = "authenticating…";
+    try {
+      content = await decrypt(loginSecret(user, pw));
+      $("pw").value = "";
+      document.activeElement.blur();
+      startMission();
+    } catch {
+      misses++;
+      status.className = "status error";
+      status.textContent = misses > 2 ? "invalid credentials — check spelling" : "invalid credentials";
+      const f = $("login-form"); f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake");
+      $("pw").select();
+    } finally {
+      $("login-btn").disabled = false;
+    }
+  });
+
+  async function startMission() {
+    $("login").classList.add("leaving");
+    await sleep(700);
+    $("login").hidden = true;
+    if (!game) return showLetter();
+    state = "brief";
+    $("agent").textContent = content.to || "agent";
+    $("brief").hidden = false;
+    await sleep(2600);
+    $("brief").hidden = true;
+    state = "play";
+    game.start();
+    game.onOpened(() => { $("hud").hidden = true; showLetter(); });
+    game.onReopen(viewLoot);
+    const chop = createChop({
+      onWin() { game.unlock(); },
+      onLeave() { state = "play"; $("hud").hidden = false; say("the drop is still locked — tap it to try again"); },
+    });
+    game.onChallenge(() => { state = "minigame"; $("hud").hidden = true; chop.open(); });
+    $("hud").hidden = false;
+    setTimeout(() => say(matchMedia("(pointer: coarse)").matches ? "tap the ground to move" : "click the ground or use WASD to move"), 700);
+    setTimeout(() => { if (/move/.test(bubbleText)) say("follow the arrows to the drop"); }, 6000);
+  }
+
+  /* =================== back to the map =================== */
+  let reachedCard = false;
+  function backToMap() {
+    $("letter-layer").hidden = true;
+    $("card-layer").hidden = true;
+    state = "play";
+    game.explore();
+    $("objective").textContent = "Explore freely";
+    $("view-loot").hidden = false;
+    $("hud").hidden = false;
+    say("tap the drop anytime to see your loot");
+  }
+  function viewLoot() {
+    $("hud").hidden = true;
+    if (reachedCard) { state = "card"; $("card-layer").hidden = false; }
+    else showLetter();
+  }
+  $("view-loot").addEventListener("click", viewLoot);
+  document.querySelectorAll(".back-to-map").forEach((b) => {
+    if (!game) b.hidden = true; // no map to go back to without 3D
+    b.addEventListener("click", backToMap);
+  });
+
+  /* =================== letter =================== */
+  async function showLetter() {
+    state = "letter";
+    $("msg-from").textContent = content.from ? `message from ${content.from}` : "incoming message";
+    $("dear").textContent = `${content.to ? "Hey " + content.to : "Hey"},`;
+    const body = $("body");
+    body.textContent = "";
+    (content.message || []).forEach((t) => {
+      const p = document.createElement("p");
+      p.className = "body fade";
+      p.textContent = t;
+      body.appendChild(p);
+    });
+    $("signoff").textContent = content.signoff || "";
+    $("from").textContent = content.from || "";
+    if (!content.gift) $("more-wrap").remove();
+    $("letter-layer").hidden = false;
+    await sleep(800);
+    for (const el of document.querySelectorAll("#msg-body .fade")) {
+      el.classList.add("in");
+      await sleep(el.classList.contains("body") ? 650 : 300);
+    }
+  }
+
+  /* =================== gift card =================== */
+  $("more").addEventListener("click", () => {
+    const g = content.gift;
+    $("letter-layer").hidden = true;
+    state = "card";
+    $("card-layer").hidden = false;
+    if (reachedCard) return;
+    reachedCard = true;
+    // Read the intro first; the card only drops in after "Show me".
+    $("g-intro").textContent = g.intro || "";
+    $("card-intro-wrap").hidden = !g.intro;
+    $("card-reveal").hidden = !!g.intro;
+    if (g.image && /^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(g.image)) {
+      $("front").style.backgroundImage = `url("${g.image}")`;
+      $("back").style.backgroundImage = `linear-gradient(rgba(9,14,20,.84), rgba(9,14,20,.93)), url("${g.image}")`;
+    } else {
+      const b = document.createElement("span");
+      b.className = "brand-fallback"; b.textContent = g.brand || "";
+      $("front").appendChild(b);
+    }
+    $("g-code").textContent = g.code || "";
+    $("g-amount").textContent = "";
+    if (g.amount) { const b = document.createElement("b"); b.textContent = g.amount; $("g-amount").append(b, ` ${g.brand || ""} gift card`); }
+    if (g.pin) { $("g-pin").hidden = false; $("g-pin").querySelector("code").textContent = g.pin; }
+    if (g.redeem_url && /^https:\/\//i.test(g.redeem_url)) { $("redeem").href = g.redeem_url; $("redeem").hidden = false; }
+    if (g.note) $("g-note").textContent = g.note;
+    const sh = $("shards");
+    for (let i = 0; i < 14; i++) {
+      const s = document.createElement("i");
+      s.style.left = Math.random() * 100 + "%";
+      s.style.top = Math.random() * 100 + "%";
+      s.style.setProperty("--d", 1.6 + Math.random() * 2 + "s");
+      s.style.setProperty("--delay", -Math.random() * 3 + "s");
+      sh.appendChild(s);
+    }
+  });
+
+  $("show-card").addEventListener("click", () => {
+    $("card-intro-wrap").hidden = true;
+    $("card-reveal").hidden = false;
+  });
+
+  let seenCode = false;
+  $("flip").addEventListener("click", () => {
+    const f = $("flip");
+    const on = f.classList.toggle("flipped");
+    f.setAttribute("aria-pressed", String(on));
+    f.setAttribute("aria-label", on ? `Your code is ${content.gift.code}. Tap to flip back.` : "Your gift card. Tap to see the code.");
+    if (on && !seenCode) {
+      seenCode = true;
+      $("card-actions").hidden = false;
+      $("g-note").hidden = !content.gift.note;
+      $("card-hint").hidden = true;
+      const r = f.getBoundingClientRect();
+      setTimeout(() => shards(r.left + r.width / 2, r.top + r.height / 2, 160), 380);
+    }
+  });
+
+  const tilt = $("tilt");
+  tilt.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const r = tilt.getBoundingClientRect();
+    tilt.style.setProperty("--ry", ((e.clientX - r.left) / r.width - 0.5) * 18 + "deg");
+    tilt.style.setProperty("--rx", (0.5 - (e.clientY - r.top) / r.height) * 12 + "deg");
+  });
+  tilt.addEventListener("pointerleave", () => { tilt.style.setProperty("--rx", "0deg"); tilt.style.setProperty("--ry", "0deg"); });
+
+  function copiedToast(text) {
+    const t = document.createElement("div");
+    t.className = "copied"; t.textContent = text;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2000);
+  }
+  async function copyCode() {
+    try { await navigator.clipboard.writeText(content.gift.code); copiedToast("code copied"); return true; }
+    catch { return false; }
+  }
+  $("copy").addEventListener("click", async () => { if (!(await copyCode())) $("copy").textContent = content.gift.code; });
+  // Redeem opens the store in a new tab and copies the code so it's ready to paste at checkout.
+  $("redeem").addEventListener("click", () => { copyCode(); });
+
+  // Reloading drops the decrypted content from memory and returns to sign-in.
+  $("sign-out").addEventListener("click", () => location.reload());
+
+  /* =================== shard burst (2D, over everything) =================== */
+  const cv = $("fx"), cx = cv.getContext("2d");
+  const cols = ["#ff4655", "#3ee6d6", "#ece8e1", "#ffffff", "#9fd2f2"];
+  let bits = [], running = false;
+  const fit = () => { const d = devicePixelRatio || 1; cv.width = innerWidth * d; cv.height = innerHeight * d; cx.setTransform(d, 0, 0, d, 0, 0); };
+  addEventListener("resize", fit); fit();
+  function shards(x, y, n) {
+    if (reduceMotion) return;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 4 + Math.random() * 11;
+      bits.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 6, size: 4 + Math.random() * 8, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.35, c: cols[(Math.random() * cols.length) | 0], tri: Math.random() < 0.5, life: 0 });
+    }
+    if (!running) { running = true; requestAnimationFrame(tick); }
+  }
+  function tick() {
+    cx.clearRect(0, 0, innerWidth, innerHeight);
+    bits = bits.filter((p) => p.life < 200 && p.y < innerHeight + 40);
+    for (const p of bits) {
+      p.life++; p.vy += 0.22; p.vx *= 0.985; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
+      cx.globalAlpha = Math.max(0, 1 - p.life / 200); cx.fillStyle = p.c;
+      if (p.tri) { cx.beginPath(); cx.moveTo(0, -p.size / 2); cx.lineTo(p.size / 2, p.size / 2); cx.lineTo(-p.size / 2, p.size / 2); cx.fill(); }
+      else cx.fillRect(-p.size / 2, -p.size / 6, p.size, p.size / 3);
+      cx.restore();
+    }
+    if (bits.length) requestAnimationFrame(tick); else { running = false; cx.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+})();
+</script>
+</body>
+</html>
